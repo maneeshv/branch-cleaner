@@ -1,0 +1,16 @@
+{
+  "name": "branch-cleaner",
+  "version": "0.1.0",
+  "description": "Local Git branch cleanup CLI with a filterable web UI.",
+  "type": "module",
+  "bin": {
+    "branch-cleaner": "./src/cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "start": "node src/cli.mjs serve"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
