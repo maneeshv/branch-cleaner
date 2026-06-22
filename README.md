@@ -8,6 +8,26 @@ The default mode is local-only. It reads existing local refs and remote-tracking
 refs without contacting the network. Fetching and pruning remote-tracking refs
 only happens when requested explicitly.
 
+## Install
+
+From this repository, install the package binary globally:
+
+```bash
+npm install -g .
+```
+
+For local development, you can link the package instead:
+
+```bash
+npm link
+```
+
+Verify the CLI is available:
+
+```bash
+branch-cleaner --help
+```
+
 ## Usage
 
 Run from this repository:
@@ -46,4 +66,3 @@ Options:
 ```bash
 npm test
 ```
-
