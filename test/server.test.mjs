@@ -1,0 +1,122 @@
+import { execFile } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { afterEach, describe, it } from "node:test";
+import assert from "node:assert/strict";
+
+import { startServer } from "../src/server.mjs";
+
+const execFileAsync = promisify(execFile);
+
+const cleanups = [];
+
+afterEach(async () => {
+  await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
+});
+
+describe("server mutation protection", () => {
+  it("prevents the UI from being embedded in another page", async () => {
+    const repoPath = await createRepo();
+    const server = await startServer({ baseBranch: "main", repoPath });
+    cleanups.push(() => server.close());
+
+    const response = await fetch(server.url);
+
+    assert.equal(
+      response.headers.get("content-security-policy"),
+      "frame-ancestors 'none'",
+    );
+    assert.equal(response.headers.get("x-frame-options"), "DENY");
+  });
+
+  it("rejects branch deletion without the server token", async () => {
+    const repoPath = await createRepo();
+    const server = await startServer({ baseBranch: "main", repoPath });
+    cleanups.push(() => server.close());
+
+    const response = await fetch(`${server.url}/api/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ branches: ["feature/delete-me"], force: false }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 403);
+    assert.match(body.error, /Invalid request token/);
+    assert.equal(await branchExists(repoPath, "feature/delete-me"), true);
+  });
+
+  it("allows branch deletion with the server token", async () => {
+    const repoPath = await createRepo();
+    const server = await startServer({ baseBranch: "main", repoPath });
+    cleanups.push(() => server.close());
+
+    const response = await fetch(`${server.url}/api/delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Branch-Cleaner-Token": server.token,
+      },
+      body: JSON.stringify({ branches: ["feature/delete-me"], force: false }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(body.deleted, [
+      {
+        branch: "feature/delete-me",
+        command: "git branch -d -- feature/delete-me",
+      },
+    ]);
+    assert.equal(await branchExists(repoPath, "feature/delete-me"), false);
+  });
+
+  it("rejects oversized JSON mutation bodies", async () => {
+    const repoPath = await createRepo();
+    const server = await startServer({ baseBranch: "main", repoPath });
+    cleanups.push(() => server.close());
+
+    const response = await fetch(`${server.url}/api/delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Branch-Cleaner-Token": server.token,
+      },
+      body: JSON.stringify({ branches: [], padding: "x".repeat(70 * 1024) }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 413);
+    assert.match(body.error, /Request body too large/);
+  });
+});
+
+async function createRepo() {
+  const repoPath = await mkdtemp(join(tmpdir(), "branch-cleaner-test-"));
+  cleanups.push(() => rm(repoPath, { force: true, recursive: true }));
+
+  await git(repoPath, ["init", "-b", "main"]);
+  await git(repoPath, ["config", "user.name", "Branch Cleaner Test"]);
+  await git(repoPath, ["config", "user.email", "branch-cleaner@example.invalid"]);
+  await git(repoPath, ["commit", "--allow-empty", "-m", "initial"]);
+  await git(repoPath, ["checkout", "-b", "feature/delete-me"]);
+  await git(repoPath, ["checkout", "main"]);
+  await git(repoPath, ["merge", "--no-edit", "feature/delete-me"]);
+
+  return repoPath;
+}
+
+async function branchExists(repoPath, branchName) {
+  try {
+    await git(repoPath, ["rev-parse", "--verify", "--quiet", branchName]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function git(repoPath, args) {
+  await execFileAsync("git", args, { cwd: repoPath });
+}

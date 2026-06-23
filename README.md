@@ -30,6 +30,18 @@ branch-cleaner --help
 
 ## Usage
 
+Install from npm:
+
+```bash
+npm install -g branch-cleaner
+```
+
+Then run:
+
+```bash
+branch-cleaner serve --repo /path/to/repo --base dev
+```
+
 Run from this repository:
 
 ```bash
@@ -60,9 +72,26 @@ Options:
 - Does not delete remote branches.
 - Does not run `git fetch --prune` unless `--fetch` is passed or the UI refresh
   button is confirmed.
+- Binds the web server to `127.0.0.1` and requires an ephemeral request token
+  for mutating browser requests.
 
 ## Development
 
 ```bash
 npm test
+```
+
+Check the package contents before publishing:
+
+```bash
+npm run pack:dry-run
+```
+
+## Publishing
+
+Only maintainers with npm package access can publish a release.
+
+```bash
+npm version patch
+npm publish
 ```

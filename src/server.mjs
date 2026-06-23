@@ -1,4 +1,5 @@
 import http from "node:http";
+import { randomUUID } from "node:crypto";
 
 import {
   deleteBranches,
@@ -9,6 +10,8 @@ import {
 } from "./git.mjs";
 import { renderHtml } from "./html.mjs";
 
+const MAX_JSON_BODY_BYTES = 64 * 1024;
+
 export async function startServer({
   baseBranch,
   fetchAtStartup = false,
@@ -18,6 +21,7 @@ export async function startServer({
 }) {
   const repoRoot = await getRepoRoot(repoPath);
   const resolvedBase = baseBranch || (await getDefaultBaseBranch(repoRoot));
+  const token = randomUUID();
 
   if (fetchAtStartup) {
     await fetchPrune(repoRoot);
@@ -30,9 +34,10 @@ export async function startServer({
         repoPath: repoRoot,
         request,
         response,
+        token,
       });
     } catch (error) {
-      sendJson(response, 500, { error: error.message });
+      sendJson(response, error.statusCode || 500, { error: error.message });
     }
   });
 
@@ -49,15 +54,16 @@ export async function startServer({
     baseBranch: resolvedBase,
     close: () => new Promise((resolve) => server.close(resolve)),
     repoPath: repoRoot,
+    token,
     url: `http://${host}:${address.port}`,
   };
 }
 
-async function routeRequest({ baseBranch, repoPath, request, response }) {
+async function routeRequest({ baseBranch, repoPath, request, response, token }) {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (request.method === "GET" && url.pathname === "/") {
-    sendHtml(response, renderHtml({ baseBranch, repoPath }));
+    sendHtml(response, renderHtml({ baseBranch, repoPath, requestToken: token }));
     return;
   }
 
@@ -71,12 +77,14 @@ async function routeRequest({ baseBranch, repoPath, request, response }) {
   }
 
   if (request.method === "POST" && url.pathname === "/api/fetch") {
+    assertValidRequestToken(request, token);
     await fetchPrune(repoPath);
     sendJson(response, 200, { ok: true });
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/delete") {
+    assertValidRequestToken(request, token);
     const body = await readJson(request);
     const branches = Array.isArray(body.branches) ? body.branches : [];
     const rows = await loadBranches({ baseBranch, repoPath });
@@ -93,10 +101,18 @@ async function routeRequest({ baseBranch, repoPath, request, response }) {
   sendJson(response, 404, { error: "Not found" });
 }
 
+function assertValidRequestToken(request, token) {
+  if (request.headers["x-branch-cleaner-token"] !== token) {
+    throw new HttpError(403, "Invalid request token");
+  }
+}
+
 function sendHtml(response, html) {
   response.writeHead(200, {
+    "Content-Security-Policy": "frame-ancestors 'none'",
     "Content-Type": "text/html; charset=utf-8",
     "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
   });
   response.end(html);
 }
@@ -111,9 +127,21 @@ function sendJson(response, statusCode, body) {
 
 async function readJson(request) {
   const chunks = [];
+  let bodyBytes = 0;
   for await (const chunk of request) {
+    bodyBytes += chunk.length;
+    if (bodyBytes > MAX_JSON_BODY_BYTES) {
+      throw new HttpError(413, "Request body too large");
+    }
     chunks.push(chunk);
   }
   const rawBody = Buffer.concat(chunks).toString("utf8");
   return rawBody ? JSON.parse(rawBody) : {};
+}
+
+class HttpError extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.statusCode = statusCode;
+  }
 }

@@ -1,4 +1,4 @@
-export function renderHtml({ baseBranch, repoPath }) {
+export function renderHtml({ baseBranch, repoPath, requestToken }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -205,6 +205,7 @@ export function renderHtml({ baseBranch, repoPath }) {
   </main>
 
   <script>
+    const requestToken = ${JSON.stringify(requestToken)};
     const state = { rows: [], selected: new Set() };
     const rowsBody = document.getElementById("rows");
     const search = document.getElementById("search");
@@ -308,7 +309,10 @@ export function renderHtml({ baseBranch, repoPath }) {
     document.getElementById("fetchButton").addEventListener("click", async () => {
       if (!confirm("Run git fetch --prune for this repository?")) return;
       setMessage("Fetching and pruning remote-tracking refs...");
-      const response = await fetch("/api/fetch", { method: "POST" });
+      const response = await fetch("/api/fetch", {
+        method: "POST",
+        headers: { "X-Branch-Cleaner-Token": requestToken },
+      });
       const body = await response.json();
       if (!response.ok) return setMessage(body.error || "Fetch failed", true);
       await loadRows();
@@ -321,7 +325,10 @@ export function renderHtml({ baseBranch, repoPath }) {
       if (!confirm("Delete these local branches?\\n\\n" + command)) return;
       const response = await fetch("/api/delete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Branch-Cleaner-Token": requestToken,
+        },
         body: JSON.stringify({ branches, force }),
       });
       const body = await response.json();

@@ -3,10 +3,34 @@
   "version": "0.1.0",
   "description": "Local Git branch cleanup CLI with a filterable web UI.",
   "type": "module",
+  "license": "MIT",
+  "author": "Maneesh V",
+  "homepage": "https://github.com/maneeshv/branch-cleaner#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maneeshv/branch-cleaner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/maneeshv/branch-cleaner/issues"
+  },
+  "keywords": [
+    "git",
+    "branch",
+    "cleanup",
+    "cli",
+    "local-first"
+  ],
   "bin": {
     "branch-cleaner": "./src/cli.mjs"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "pack:dry-run": "npm pack --dry-run",
+    "prepublishOnly": "npm test",
     "test": "node --test test/*.test.mjs",
     "start": "node src/cli.mjs serve"
   },
