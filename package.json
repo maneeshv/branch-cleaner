@@ -21,7 +21,7 @@
     "local-first"
   ],
   "bin": {
-    "branch-cleaner": "./src/cli.mjs"
+    "branch-cleaner": "src/cli.mjs"
   },
   "files": [
     "src",
