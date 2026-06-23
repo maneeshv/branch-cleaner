@@ -19,7 +19,7 @@ async function main() {
     repoPath: args.repo,
   });
 
-  console.log(`Branch Cleaner running at ${server.url}`);
+  console.log(`Branch Purge running at ${server.url}`);
   console.log(`Repository: ${server.repoPath}`);
   console.log(`Base branch: ${server.baseBranch}`);
   console.log("Press Ctrl+C to stop.");
@@ -92,7 +92,7 @@ function openBrowser(url) {
 
 function printHelp() {
   console.log(`Usage:
-  branch-cleaner serve [--repo PATH] [--base BRANCH] [--fetch] [--port PORT] [--no-open]
+  branch-purge serve [--repo PATH] [--base BRANCH] [--fetch] [--port PORT] [--no-open]
 
 Options:
   --repo PATH      Git repository to inspect. Defaults to the current directory.

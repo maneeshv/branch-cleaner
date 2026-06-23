@@ -4,7 +4,7 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Branch Cleaner</title>
+  <title>Branch Purge</title>
   <style>
     :root {
       --bg: #f6f7f7;
@@ -152,7 +152,7 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
   <main>
     <header>
       <div>
-        <h1>Branch Cleaner</h1>
+        <h1>Branch Purge</h1>
         <div class="meta">Repository: <code>${escapeHtml(repoPath)}</code></div>
         <div class="meta">Base branch: <code>${escapeHtml(baseBranch)}</code></div>
       </div>

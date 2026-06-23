@@ -1,5 +1,5 @@
 {
-  "name": "branch-clean",
+  "name": "branch-purge",
   "version": "0.1.1",
   "description": "Local Git branch cleanup CLI with a filterable web UI.",
   "type": "module",
@@ -21,7 +21,7 @@
     "local-first"
   ],
   "bin": {
-    "branch-cleaner": "src/cli.mjs"
+    "branch-purge": "src/cli.mjs"
   },
   "files": [
     "src",

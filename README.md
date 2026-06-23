@@ -1,6 +1,6 @@
-# Branch Cleaner
+# Branch Purge
 
-Branch Cleaner is a standalone local Git branch cleanup tool. It starts a
+Branch Purge is a standalone local Git branch cleanup tool. It starts a
 localhost web UI for searching, filtering, selecting, and deleting local
 branches in any Git repository.
 
@@ -25,7 +25,7 @@ npm link
 Verify the CLI is available:
 
 ```bash
-branch-cleaner --help
+branch-purge --help
 ```
 
 ## Usage
@@ -33,13 +33,13 @@ branch-cleaner --help
 Install from npm:
 
 ```bash
-npm install -g branch-clean
+npm install -g branch-purge
 ```
 
 Then run:
 
 ```bash
-branch-cleaner serve --repo /path/to/repo --base dev
+branch-purge serve --repo /path/to/repo --base dev
 ```
 
 Run from this repository:
@@ -51,7 +51,7 @@ node src/cli.mjs serve --repo /path/to/repo --base dev
 Or use the package binary after linking or installing:
 
 ```bash
-branch-cleaner serve --repo /path/to/repo --base dev
+branch-purge serve --repo /path/to/repo --base dev
 ```
 
 Options:
