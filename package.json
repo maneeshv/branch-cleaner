@@ -1,6 +1,6 @@
 {
   "name": "branch-purge",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Local Git branch cleanup CLI with a filterable web UI.",
   "type": "module",
   "license": "MIT",
