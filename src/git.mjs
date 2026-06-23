@@ -39,7 +39,7 @@ export async function loadBranches({ baseBranch, repoPath }) {
     await Promise.all([
       runGit(repoPath, [
         "for-each-ref",
-        "--format=%(refname:short)%00%(upstream:short)%00%(objectname:short)",
+        "--format=%(refname:short)%00%(upstream:short)%00%(objectname:short)%00%(authordate:iso-strict)",
         "refs/heads",
       ]),
       runGit(repoPath, [

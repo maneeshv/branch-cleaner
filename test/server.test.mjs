@@ -31,6 +31,24 @@ describe("server mutation protection", () => {
     assert.equal(response.headers.get("x-frame-options"), "DENY");
   });
 
+  it("returns and labels each branch last committed time", async () => {
+    const repoPath = await createRepo();
+    const server = await startServer({ baseBranch: "main", repoPath });
+    cleanups.push(() => server.close());
+
+    const htmlResponse = await fetch(server.url);
+    const html = await htmlResponse.text();
+    const apiResponse = await fetch(`${server.url}/api/branches`);
+    const body = await apiResponse.json();
+    const deleteBranch = body.branches.find(
+      (branch) => branch.name === "feature/delete-me",
+    );
+
+    assert.match(html, />Last committed</);
+    assert.equal(apiResponse.status, 200);
+    assert.match(deleteBranch.lastCommittedAt, /^\d{4}-\d{2}-\d{2}T/);
+  });
+
   it("rejects branch deletion without the server token", async () => {
     const repoPath = await createRepo();
     const server = await startServer({ baseBranch: "main", repoPath });

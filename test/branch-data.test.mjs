@@ -11,10 +11,10 @@ import {
 describe("branch classification", () => {
   it("marks same-name remote refs, stale upstreams, merge status, and protected branches", () => {
     const locals = parseBranchLines([
-      "dev\u0000origin/dev\u0000aaa",
-      "feat/merged\u0000origin/feat/merged\u0000bbb",
-      "feat/stale\u0000origin/feat/stale\u0000ccc",
-      "feat/local-only\u0000\u0000ddd",
+      "dev\u0000origin/dev\u0000aaa\u00002026-06-20T10:11:12+00:00",
+      "feat/merged\u0000origin/feat/merged\u0000bbb\u00002026-06-21T10:11:12+00:00",
+      "feat/stale\u0000origin/feat/stale\u0000ccc\u00002026-06-22T10:11:12+00:00",
+      "feat/local-only\u0000\u0000ddd\u00002026-06-23T10:11:12+00:00",
     ].join("\n"));
     const remotes = parseRemoteLines([
       "origin/dev",
@@ -34,6 +34,7 @@ describe("branch classification", () => {
     assert.deepEqual(
       rows.map((row) => ({
         name: row.name,
+        lastCommittedAt: row.lastCommittedAt,
         remoteStatus: row.remoteStatus,
         remoteRef: row.remoteRef,
         mergedToBase: row.mergedToBase,
@@ -43,6 +44,7 @@ describe("branch classification", () => {
       [
         {
           name: "dev",
+          lastCommittedAt: "2026-06-20T10:11:12+00:00",
           remoteStatus: "present",
           remoteRef: "origin/dev",
           mergedToBase: true,
@@ -51,6 +53,7 @@ describe("branch classification", () => {
         },
         {
           name: "feat/merged",
+          lastCommittedAt: "2026-06-21T10:11:12+00:00",
           remoteStatus: "present",
           remoteRef: "origin/feat/merged",
           mergedToBase: true,
@@ -59,6 +62,7 @@ describe("branch classification", () => {
         },
         {
           name: "feat/stale",
+          lastCommittedAt: "2026-06-22T10:11:12+00:00",
           remoteStatus: "stale-upstream",
           remoteRef: "origin/feat/stale",
           mergedToBase: false,
@@ -67,6 +71,7 @@ describe("branch classification", () => {
         },
         {
           name: "feat/local-only",
+          lastCommittedAt: "2026-06-23T10:11:12+00:00",
           remoteStatus: "present",
           remoteRef: "upstream/feat/local-only",
           mergedToBase: false,

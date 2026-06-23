@@ -5,9 +5,10 @@ export function parseBranchLines(output) {
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [name, upstream, commit] = line.split("\u0000");
+      const [name, upstream, commit, lastCommittedAt] = line.split("\u0000");
       return {
         name,
+        lastCommittedAt: lastCommittedAt || "",
         upstream: upstream || "",
         commit: commit || "",
       };
@@ -43,6 +44,7 @@ export function classifyBranches({
 
     return {
       commit: branch.commit,
+      lastCommittedAt: branch.lastCommittedAt,
       mergedToBase,
       name: branch.name,
       protected: Boolean(protection),

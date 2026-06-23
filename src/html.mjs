@@ -107,7 +107,7 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
       border: 1px solid var(--line);
       border-radius: 8px;
     }
-    table { width: 100%; min-width: 980px; border-collapse: collapse; }
+    table { width: 100%; min-width: 1080px; border-collapse: collapse; }
     th, td {
       padding: 10px 12px;
       border-bottom: 1px solid var(--line);
@@ -139,6 +139,7 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
     .no { color: var(--danger); background: #fff1f1; }
     .stale { color: var(--warn); background: #fff7df; }
     .detail { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .time { white-space: nowrap; }
     .message { min-height: 22px; color: var(--muted); }
     .message.error { color: var(--danger); }
     .hidden { display: none; }
@@ -194,6 +195,7 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
           <tr>
             <th><input id="toggleVisible" type="checkbox" aria-label="Toggle visible rows"></th>
             <th>Local branch</th>
+            <th>Last committed</th>
             <th>Remote branch</th>
             <th>Merged</th>
             <th>Protected</th>
@@ -245,14 +247,26 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
         const checked = state.selected.has(row.name) ? "checked" : "";
         const disabled = row.protected ? "disabled" : "";
         const protectedLabel = row.protected ? row.protectedReason : "No";
+        const lastCommitted = formatDateTime(row.lastCommittedAt);
         return \`<tr class="\${hidden}" data-branch="\${escapeHtml(row.name)}">
           <td><input class="row-check" type="checkbox" data-branch="\${escapeHtml(row.name)}" \${checked} \${disabled}></td>
           <td><code>\${escapeHtml(row.name)}</code><span class="detail">\${escapeHtml(row.commit)}</span></td>
+          <td><span class="time" title="\${escapeHtml(row.lastCommittedAt || "")}">\${escapeHtml(lastCommitted)}</span></td>
           <td><span class="badge \${remoteClass}">\${remoteLabel}</span>\${row.remoteRef ? \`<span class="detail"><code>\${escapeHtml(row.remoteRef)}</code></span>\` : ""}</td>
           <td><span class="badge \${row.mergedToBase ? "yes" : "no"}">\${row.mergedToBase ? "Yes" : "No"}</span></td>
           <td>\${row.protected ? \`<span class="badge stale">\${escapeHtml(protectedLabel)}</span>\` : \`<span class="badge yes">No</span>\`}</td>
         </tr>\`;
       }).join("");
+    }
+
+    function formatDateTime(value) {
+      if (!value) return "Unknown";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date);
     }
 
     async function loadRows() {
