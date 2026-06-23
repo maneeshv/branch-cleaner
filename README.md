@@ -33,7 +33,7 @@ branch-cleaner --help
 Install from npm:
 
 ```bash
-npm install -g branch-cleaner
+npm install -g branch-clean
 ```
 
 Then run:

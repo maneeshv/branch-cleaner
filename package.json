@@ -1,5 +1,5 @@
 {
-  "name": "branch-cleaner",
+  "name": "branch-clean",
   "version": "0.1.2",
   "description": "Local Git branch cleanup CLI with a filterable web UI.",
   "type": "module",
