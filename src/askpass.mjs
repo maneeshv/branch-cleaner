@@ -1,10 +1,22 @@
 #!/usr/bin/env node
 
-const passphrase = process.env.BRANCH_PURGE_SSH_PASSPHRASE;
+import { readFileSync, unlinkSync } from "node:fs";
+
+const passphraseFile = process.env.BRANCH_PURGE_SSH_PASSPHRASE_FILE;
 const prompt = process.argv.slice(2).join(" ");
 
-if (passphrase !== undefined) {
-  process.stdout.write(`${passphrase}\n`);
+if (passphraseFile) {
+  try {
+    const passphrase = readFileSync(passphraseFile, "utf8");
+    process.stdout.write(`${passphrase}\n`);
+  } finally {
+    // Consume-and-delete: shrink the window the secret exists on disk.
+    try {
+      unlinkSync(passphraseFile);
+    } catch {
+      // already gone / racing cleanup — nothing to do
+    }
+  }
   process.exit(0);
 }
 
