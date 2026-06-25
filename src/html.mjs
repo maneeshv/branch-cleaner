@@ -143,6 +143,29 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
     .message { min-height: 22px; color: var(--muted); }
     .message.error { color: var(--danger); }
     .hidden { display: none; }
+    dialog {
+      width: min(420px, calc(100vw - 32px));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0;
+      color: var(--text);
+      box-shadow: 0 20px 50px rgba(31, 41, 51, 0.18);
+    }
+    dialog::backdrop { background: rgba(31, 41, 51, 0.38); }
+    .dialog-body { padding: 18px; }
+    .dialog-body h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+    .dialog-body p { margin: 0 0 14px; color: var(--muted); }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
     @media (max-width: 780px) {
       header { display: block; }
       .controls { grid-template-columns: 1fr; }
@@ -189,6 +212,18 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
 
     <p id="message" class="message"></p>
 
+    <dialog id="passphraseDialog" aria-labelledby="passphraseTitle">
+      <form id="passphraseForm" method="dialog" class="dialog-body">
+        <h2 id="passphraseTitle">SSH key passphrase</h2>
+        <p id="passphrasePrompt">Enter the passphrase for this key to refresh from remote.</p>
+        <label>Passphrase<input id="passphraseInput" type="password" autocomplete="current-password"></label>
+        <div class="dialog-actions">
+          <button id="passphraseCancel" type="button">Cancel</button>
+          <button class="primary" type="submit">Refresh</button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="table-wrap">
       <table>
         <thead>
@@ -218,6 +253,12 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
     const deleteButton = document.getElementById("deleteButton");
     const forceDelete = document.getElementById("forceDelete");
     const message = document.getElementById("message");
+    const fetchButton = document.getElementById("fetchButton");
+    const passphraseDialog = document.getElementById("passphraseDialog");
+    const passphraseForm = document.getElementById("passphraseForm");
+    const passphraseCancel = document.getElementById("passphraseCancel");
+    const passphraseInput = document.getElementById("passphraseInput");
+    const passphrasePrompt = document.getElementById("passphrasePrompt");
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>'"]/g, (char) => ({
@@ -285,6 +326,48 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
       message.classList.toggle("error", isError);
     }
 
+    function requestPassphrase(promptText) {
+      return new Promise((resolve) => {
+        passphrasePrompt.textContent = promptText || "Enter the SSH key passphrase to refresh from remote.";
+        passphraseInput.value = "";
+        passphraseDialog.returnValue = "cancel";
+
+        const handleClose = () => {
+          passphraseDialog.removeEventListener("close", handleClose);
+          const value = passphraseDialog.returnValue === "submit" ? passphraseInput.value : null;
+          passphraseInput.value = "";
+          resolve(value);
+        };
+
+        passphraseDialog.addEventListener("close", handleClose);
+        passphraseDialog.showModal();
+        passphraseInput.focus();
+      });
+    }
+
+    async function refreshFromRemote(passphrase) {
+      const headers = { "X-Branch-Cleaner-Token": requestToken };
+      const options = { method: "POST", headers };
+      if (passphrase !== undefined) {
+        headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify({ passphrase });
+      }
+
+      const response = await fetch("/api/fetch", options);
+      const body = await response.json();
+      if (response.status === 401 && body.code === "SSH_PASSPHRASE_REQUIRED") {
+        const nextPassphrase = await requestPassphrase(body.prompt);
+        if (nextPassphrase === null) {
+          setMessage("Refresh canceled.");
+          return false;
+        }
+        setMessage("Fetching and pruning remote-tracking refs...");
+        return refreshFromRemote(nextPassphrase);
+      }
+      if (!response.ok) throw new Error(body.error || "Fetch failed");
+      return true;
+    }
+
     search.addEventListener("input", renderRows);
     remoteFilter.addEventListener("change", renderRows);
     mergedFilter.addEventListener("change", renderRows);
@@ -320,16 +403,27 @@ export function renderHtml({ baseBranch, repoPath, requestToken }) {
       renderRows();
     });
 
-    document.getElementById("fetchButton").addEventListener("click", async () => {
+    passphraseCancel.addEventListener("click", () => {
+      passphraseDialog.close("cancel");
+    });
+
+    passphraseForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      passphraseDialog.close("submit");
+    });
+
+    fetchButton.addEventListener("click", async () => {
       if (!confirm("Run git fetch --prune for this repository?")) return;
-      setMessage("Fetching and pruning remote-tracking refs...");
-      const response = await fetch("/api/fetch", {
-        method: "POST",
-        headers: { "X-Branch-Cleaner-Token": requestToken },
-      });
-      const body = await response.json();
-      if (!response.ok) return setMessage(body.error || "Fetch failed", true);
-      await loadRows();
+      fetchButton.disabled = true;
+      try {
+        setMessage("Fetching and pruning remote-tracking refs...");
+        const refreshed = await refreshFromRemote();
+        if (refreshed) await loadRows();
+      } catch (error) {
+        setMessage(error.message, true);
+      } finally {
+        fetchButton.disabled = false;
+      }
     });
 
     deleteButton.addEventListener("click", async () => {

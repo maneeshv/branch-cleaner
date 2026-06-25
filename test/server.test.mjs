@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -91,6 +91,63 @@ describe("server mutation protection", () => {
     assert.equal(await branchExists(repoPath, "feature/delete-me"), false);
   });
 
+  it("returns an SSH passphrase prompt for refresh from remote", async () => {
+    const repoPath = await createRepo();
+    const binDir = await createFakeGit(`
+#!/bin/sh
+"$SSH_ASKPASS" "Enter passphrase for key '/tmp/test_key':" >/dev/null
+exit 1
+`);
+    const server = await startServer({
+      baseBranch: "main",
+      fetchOptions: { env: { PATH: `${binDir}:${process.env.PATH}` } },
+      repoPath,
+    });
+    cleanups.push(() => server.close());
+
+    const response = await fetch(`${server.url}/api/fetch`, {
+      method: "POST",
+      headers: { "X-Branch-Cleaner-Token": server.token },
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 401);
+    assert.equal(body.code, "SSH_PASSPHRASE_REQUIRED");
+    assert.equal(body.prompt, "Enter passphrase for key '/tmp/test_key':");
+  });
+
+  it("accepts an SSH passphrase for refresh from remote", async () => {
+    const repoPath = await createRepo();
+    const binDir = await createFakeGit(`
+#!/bin/sh
+passphrase="$("$SSH_ASKPASS" "Enter passphrase for key '/tmp/test_key':")"
+if [ "$passphrase" = "secret" ]; then
+  exit 0
+fi
+echo "bad passphrase" >&2
+exit 1
+`);
+    const server = await startServer({
+      baseBranch: "main",
+      fetchOptions: { env: { PATH: `${binDir}:${process.env.PATH}` } },
+      repoPath,
+    });
+    cleanups.push(() => server.close());
+
+    const response = await fetch(`${server.url}/api/fetch`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Branch-Cleaner-Token": server.token,
+      },
+      body: JSON.stringify({ passphrase: "secret" }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(body, { ok: true });
+  });
+
   it("rejects oversized JSON mutation bodies", async () => {
     const repoPath = await createRepo();
     const server = await startServer({ baseBranch: "main", repoPath });
@@ -137,4 +194,13 @@ async function branchExists(repoPath, branchName) {
 
 async function git(repoPath, args) {
   await execFileAsync("git", args, { cwd: repoPath });
+}
+
+async function createFakeGit(script) {
+  const binDir = await mkdtemp(join(tmpdir(), "branch-cleaner-git-"));
+  cleanups.push(() => rm(binDir, { force: true, recursive: true }));
+  const gitPath = join(binDir, "git");
+  await writeFile(gitPath, script.trimStart(), "utf8");
+  await chmod(gitPath, 0o755);
+  return binDir;
 }

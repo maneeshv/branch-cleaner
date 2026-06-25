@@ -1,4 +1,6 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -9,6 +11,8 @@ import {
 } from "./branch-data.mjs";
 
 const execFileAsync = promisify(execFile);
+const ASKPASS_PROMPT_PREFIX = "BRANCH_PURGE_ASKPASS_PROMPT:";
+const ASKPASS_PATH = join(dirname(fileURLToPath(import.meta.url)), "askpass.mjs");
 
 export async function getRepoRoot(repoPath) {
   const output = await runGit(repoPath, ["rev-parse", "--show-toplevel"]);
@@ -66,7 +70,12 @@ export async function loadBranches({ baseBranch, repoPath }) {
   });
 }
 
-export async function fetchPrune(repoPath) {
+export async function fetchPrune(repoPath, options = {}) {
+  if (options.interactive) {
+    await runInteractiveGit(repoPath, ["fetch", "--prune"], options);
+    return;
+  }
+
   await runGit(repoPath, ["fetch", "--prune"]);
 }
 
@@ -100,6 +109,83 @@ export async function runGit(repoPath, args) {
     const stderr = error.stderr ? String(error.stderr).trim() : "";
     const message = stderr || error.message;
     throw new Error(`git ${args.join(" ")} failed: ${message}`);
+  }
+}
+
+export class GitPassphraseRequiredError extends Error {
+  constructor(prompt) {
+    super("SSH key passphrase required");
+    this.code = "SSH_PASSPHRASE_REQUIRED";
+    this.prompt = prompt;
+    this.statusCode = 401;
+  }
+}
+
+async function runInteractiveGit(repoPath, args, { env = {}, passphrase } = {}) {
+  const child = spawn("git", args, {
+    cwd: repoPath,
+    env: buildInteractiveGitEnv({ env, passphrase }),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  const stdout = [];
+  const stderr = [];
+
+  child.stdout.on("data", (chunk) => stdout.push(chunk));
+  child.stderr.on("data", (chunk) => stderr.push(chunk));
+
+  const { code, signal } = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (closedCode, closedSignal) => {
+      resolve({ code: closedCode, signal: closedSignal });
+    });
+  });
+
+  const stdoutText = Buffer.concat(stdout).toString("utf8").trimEnd();
+  const stderrText = Buffer.concat(stderr).toString("utf8").trim();
+  if (code === 0) {
+    return stdoutText;
+  }
+
+  const prompt = extractAskpassPrompt(stderrText);
+  if (prompt && passphrase === undefined) {
+    throw new GitPassphraseRequiredError(prompt);
+  }
+
+  const details = stderrText || signal || `exit code ${code}`;
+  throw new Error(`git ${args.join(" ")} failed: ${details}`);
+}
+
+function buildInteractiveGitEnv({ env, passphrase }) {
+  const nextEnv = {
+    ...process.env,
+    ...env,
+    DISPLAY: process.env.DISPLAY || "branch-purge",
+    GIT_TERMINAL_PROMPT: "0",
+    SSH_ASKPASS: ASKPASS_PATH,
+    SSH_ASKPASS_REQUIRE: "force",
+  };
+
+  if (passphrase === undefined) {
+    delete nextEnv.BRANCH_PURGE_SSH_PASSPHRASE;
+  } else {
+    nextEnv.BRANCH_PURGE_SSH_PASSPHRASE = passphrase;
+  }
+
+  return nextEnv;
+}
+
+function extractAskpassPrompt(stderrText) {
+  const line = stderrText
+    .split(/\r?\n/)
+    .find((entry) => entry.startsWith(ASKPASS_PROMPT_PREFIX));
+  if (!line) return "";
+
+  const encodedPrompt = line.slice(ASKPASS_PROMPT_PREFIX.length);
+  try {
+    return Buffer.from(encodedPrompt, "base64").toString("utf8");
+  } catch {
+    return "";
   }
 }
 

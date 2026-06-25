@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import {
   deleteBranches,
   fetchPrune,
+  GitPassphraseRequiredError,
   getDefaultBaseBranch,
   getRepoRoot,
   loadBranches,
@@ -15,6 +16,7 @@ const MAX_JSON_BODY_BYTES = 64 * 1024;
 export async function startServer({
   baseBranch,
   fetchAtStartup = false,
+  fetchOptions = {},
   host = "127.0.0.1",
   port = 0,
   repoPath,
@@ -31,6 +33,7 @@ export async function startServer({
     try {
       await routeRequest({
         baseBranch: resolvedBase,
+        fetchOptions,
         repoPath: repoRoot,
         request,
         response,
@@ -59,7 +62,14 @@ export async function startServer({
   };
 }
 
-async function routeRequest({ baseBranch, repoPath, request, response, token }) {
+async function routeRequest({
+  baseBranch,
+  fetchOptions,
+  repoPath,
+  request,
+  response,
+  token,
+}) {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   if (request.method === "GET" && url.pathname === "/") {
@@ -78,7 +88,24 @@ async function routeRequest({ baseBranch, repoPath, request, response, token }) 
 
   if (request.method === "POST" && url.pathname === "/api/fetch") {
     assertValidRequestToken(request, token);
-    await fetchPrune(repoPath);
+    const body = await readJson(request);
+    try {
+      await fetchPrune(repoPath, {
+        ...fetchOptions,
+        interactive: true,
+        passphrase: body.passphrase,
+      });
+    } catch (error) {
+      if (error instanceof GitPassphraseRequiredError) {
+        sendJson(response, error.statusCode, {
+          code: error.code,
+          error: error.message,
+          prompt: error.prompt,
+        });
+        return;
+      }
+      throw error;
+    }
     sendJson(response, 200, { ok: true });
     return;
   }
